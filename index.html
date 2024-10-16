@@ -3,26 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SteemLogin Enhanced Example</title>
-    <script src="https://cdn.jsdelivr.net/npm/steemlogin@latest/dist/steemlogin.min.js" async></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js" async></script>
+    <title>SteemLogin Enhanced Demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/steemlogin@latest/dist/steemlogin.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
-    <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <h1 class="text-2xl font-bold mb-6 text-center text-blue-600">SteemLogin Demo</h1>
+    <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+        <h1 class="text-3xl font-bold mb-6 text-center text-blue-600">SteemLogin Demo</h1>
         <div class="space-y-4">
-            <button id="loginButton" class="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition duration-300">Login con Steem</button>
-            <button id="logoutButton" class="w-full bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 transition duration-300">Logout</button>
-            <button id="getUserDataButton" class="w-full bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition duration-300" style="display:none;">Ottieni Dati Utente</button>
+            <button id="loginButton" class="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition duration-300 flex items-center justify-center">
+                <span class="material-icons mr-2">login</span> Login con Steem
+            </button>
+            <button id="logoutButton" class="w-full bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 transition duration-300 flex items-center justify-center">
+                <span class="material-icons mr-2">logout</span> Logout
+            </button>
+            <button id="getUserDataButton" class="w-full bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition duration-300 flex items-center justify-center" style="display:none;">
+                <span class="material-icons mr-2">person</span> Ottieni Dati Utente
+            </button>
+            <div id="transferSection" class="space-y-2" style="display:none;">
+                <input type="text" id="recipientAccount" placeholder="Account destinatario" class="w-full p-2 border rounded">
+                <input type="number" id="transferAmount" placeholder="Importo (STEEM)" class="w-full p-2 border rounded" step="0.001" min="0.001">
+                <button id="transferButton" class="w-full bg-yellow-500 text-white py-2 px-4 rounded hover:bg-yellow-600 transition duration-300 flex items-center justify-center">
+                    <span class="material-icons mr-2">send</span> Trasferisci STEEM
+                </button>
+            </div>
         </div>
         <div id="status" class="mt-4 text-center text-gray-600"></div>
         <div id="userData" class="mt-4 bg-gray-50 p-4 rounded"></div>
     </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const statusElement = document.getElementById('status');
             const userDataElement = document.getElementById('userData');
             const getUserDataButton = document.getElementById('getUserDataButton');
+            const transferSection = document.getElementById('transferSection');
+            const recipientAccountInput = document.getElementById('recipientAccount');
+            const transferAmountInput = document.getElementById('transferAmount');
+            const transferButton = document.getElementById('transferButton');
             let steemClient;
             let loggedIn = false;
             let accessToken = null;
@@ -37,11 +56,12 @@
                     updateStatus('Errore: SteemLogin non è definito correttamente. Ricarica la pagina o controlla la connessione.');
                     return false;
                 }
+
                 try {
                     steemClient = new window.steemlogin.Client({
                         app: 'cur8',
                         callbackURL: window.location.origin + window.location.pathname,
-                        scope: ['login', 'vote', 'comment', 'custom_json'],
+                        scope: ['login', 'vote', 'comment', 'custom_json', 'transfer'],
                     });
                     updateStatus('SteemLogin inizializzato correttamente.');
                     return true;
@@ -53,14 +73,18 @@
 
             function login() {
                 if (!initializeSteemLogin()) return;
+                
                 if (loggedIn) {
                     updateStatus('Utente già loggato');
                     return;
                 }
+
                 try {
                     const state = Math.random().toString(36).substring(7);
                     const loginUrl = steemClient.getLoginURL(state);
+                    
                     sessionStorage.setItem('steemLoginState', state);
+
                     window.location.href = loginUrl;
                 } catch (error) {
                     console.error('Errore durante il processo di login:', error);
@@ -72,12 +96,14 @@
                 const urlParams = new URLSearchParams(window.location.search);
                 accessToken = urlParams.get('access_token');
                 const state = urlParams.get('state');
+
                 if (accessToken && state) {
                     const savedState = sessionStorage.getItem('steemLoginState');
                     if (state === savedState) {
                         loggedIn = true;
                         updateStatus('Login effettuato con successo');
-                        getUserDataButton.style.display = 'inline';
+                        getUserDataButton.style.display = 'flex';
+                        transferSection.style.display = 'block';
                         window.history.replaceState({}, document.title, window.location.pathname);
                     } else {
                         updateStatus('Errore: Stato non corrispondente');
@@ -91,10 +117,12 @@
                     updateStatus('Nessun utente loggato');
                     return;
                 }
+
                 loggedIn = false;
                 accessToken = null;
                 updateStatus('Logout effettuato');
                 getUserDataButton.style.display = 'none';
+                transferSection.style.display = 'none';
                 userDataElement.textContent = '';
             }
 
@@ -103,13 +131,18 @@
                     updateStatus('Utente non loggato. Impossibile ottenere i dati.');
                     return;
                 }
+
                 try {
                     const response = await fetch('https://api.steemlogin.com/api/me', {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`
+                        }
                     });
+
                     if (!response.ok) {
                         throw new Error('Errore nella richiesta API');
                     }
+
                     const userData = await response.json();
                     displayUserData(userData);
                 } catch (error) {
@@ -127,13 +160,47 @@
                 `;
             }
 
+            function transferSteem() {
+                if (!loggedIn) {
+                    updateStatus('Utente non loggato. Impossibile effettuare il trasferimento.');
+                    return;
+                }
+
+                const recipientAccount = recipientAccountInput.value.trim();
+                const amount = parseFloat(transferAmountInput.value);
+
+                if (!recipientAccount || isNaN(amount) || amount <= 0) {
+                    updateStatus('Inserisci un account destinatario valido e un importo maggiore di 0.');
+                    return;
+                }
+
+                const op = ['transfer', {
+                    from: '__signer',
+                    to: recipientAccount,
+                    amount: `${amount.toFixed(3)} STEEM`
+                }];
+
+                steemClient.sendOperation(op, {}, function(err, result) {
+                    if (err) {
+                        console.error('Errore durante il trasferimento:', err);
+                        updateStatus('Errore durante il trasferimento: ' + err.message);
+                    } else {
+                        console.log('Trasferimento completato:', result);
+                        updateStatus(`Trasferimento di ${amount.toFixed(3)} STEEM a ${recipientAccount} completato con successo.`);
+                    }
+                });
+            }
+
             document.getElementById('loginButton').addEventListener('click', login);
             document.getElementById('logoutButton').addEventListener('click', logout);
             getUserDataButton.addEventListener('click', getUserData);
+            transferButton.addEventListener('click', transferSteem);
+
             window.addEventListener('steemlogin:login', (event) => {
                 console.log('Login event:', event.detail);
                 updateStatus('Evento di login ricevuto');
             });
+
             window.addEventListener('steemlogin:logout', (event) => {
                 console.log('Logout event:', event.detail);
                 updateStatus('Evento di logout ricevuto');
